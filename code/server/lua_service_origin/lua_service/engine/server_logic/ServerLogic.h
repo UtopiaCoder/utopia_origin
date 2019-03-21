@@ -6,6 +6,9 @@
 #include "log/log_mgr.h"
 #include "memory_pool/MemoryPoolMgr.h"
 #include "i_service.h"
+#include "http/http_client_mgr.h"
+#include "common/task/async_task_mgr.h"
+#include "dns/dns_service.h"
 
 enum EServerLogicState
 {
@@ -25,7 +28,7 @@ public:
 	virtual ~ServerLogic();
 	bool StartLog(ELogLevel log_lvl);
 	void SetLoopSpan(int ms) { m_loop_span_ms = ms > 0 ? ms : m_loop_span_ms; }
-	void SetService(IService *service) { m_service = service; }
+	void SetService(IService *service);
 	IService * GetService() { return m_service; }
 	void SetParams() {}
 	void Loop();
@@ -44,8 +47,8 @@ protected:
 	ModuleMgr *m_module_mgr = nullptr;
 	int m_loop_span_ms = 100;
 	void **m_module_params[EMoudleName_Max];
-	std::function<void(void ***)> m_module_params_clear_fn;
-	IService *m_service;
+	std::function<void(void ***)> m_module_params_clear_fn = nullptr;
+	IService *m_service = nullptr;
 
 public:
 	double LogicSec() { return m_logic_sec; }
@@ -71,5 +74,20 @@ public:
 	MemoryPoolMgr *GetMemPool() { return m_memory_pool_mgr; }
 private:
 	MemoryPoolMgr *m_memory_pool_mgr = nullptr;
+
+public:
+	HttpClientMgr * GetHttpClientMgr() { return m_http_client_mgr; }
+private:
+	HttpClientMgr * m_http_client_mgr = nullptr;
+
+public:
+	AsyncTaskMgr * GetAsyncTaskMgr() { return m_async_task_mgr; }
+private:
+	AsyncTaskMgr * m_async_task_mgr = nullptr;
+
+public:
+	DnsService * GetDnsService() { return m_dns_service; }
+private:
+	DnsService * m_dns_service = nullptr;
 };
 

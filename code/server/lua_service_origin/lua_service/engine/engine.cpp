@@ -8,39 +8,6 @@ extern "C"
 #include "sol/sol.hpp"
 #include <chrono>
 
-#define LUA_EXIT_FAILURE -1
-#define lUA_EXIT_SUCCESS 0
-#define LUA_SCRIPT_IDX 1
-
-static int lua_status_report(lua_State *L, int status) 
-{
-	if (status != LUA_OK) 
-	{
-		const char *msg = lua_tostring(L, -1);
-		printf(msg);
-		lua_pop(L, 1);
-	}
-	return status;
-}
-
-static int lua_error_handler(lua_State *L) 
-{
-	const char *msg = lua_tostring(L, 1);
-	if (msg == NULL) 
-	{
-		if (luaL_callmeta(L, 1, "__tostring") && lua_type(L, -1) == LUA_TSTRING)
-		{
-			return 1;
-		}
-		else
-		{
-			msg = lua_pushfstring(L, "(error object is a %s value)",luaL_typename(L, 1));
-		}
-	}
-	luaL_traceback(L, L, msg, 1);  /* append a standard traceback */
-	return 1;  /* return the traceback */
-}
-
 #ifdef WIN32
 #include <direct.h>
 #define chdir _chdir
@@ -70,11 +37,88 @@ static void change_dir(std::string dir_path)
 }
 
 #include "server_logic/ServerLogic.h"
+#include "iengine.h"
 ServerLogic *g_server_logic;
 
 ServerLogic * GServerLogic()
 {
 	return g_server_logic;
+}
+
+uint64_t http_get(const std::string &url, const std::unordered_map<std::string, std::string> *heads,
+	HttpReqCnn::FnProcessRsp rsp_cb, HttpReqCnn::FnProcessEvent err_cb)
+{
+	uint64_t ret = 0;
+	if (nullptr != g_server_logic)
+	{
+		ret = g_server_logic->GetHttpClientMgr()->Get(url, heads, rsp_cb, err_cb);
+	}
+	return ret;
+}
+
+uint64_t http_delete(const std::string & url, const std::unordered_map<std::string, std::string>* heads, HttpReqCnn::FnProcessRsp rsp_cb, HttpReqCnn::FnProcessEvent err_cb)
+{
+	uint64_t ret = 0;
+	if (nullptr != g_server_logic)
+	{
+		ret = g_server_logic->GetHttpClientMgr()->Delete(url, heads, rsp_cb, err_cb);
+	}
+	return ret;
+}
+
+uint64_t http_post(const std::string &url, const std::unordered_map<std::string, std::string> *heads, const std::string *content,
+	HttpReqCnn::FnProcessRsp rsp_cb, HttpReqCnn::FnProcessEvent err_cb)
+{
+	uint64_t ret = 0;
+	if (nullptr != g_server_logic)
+	{
+		ret = g_server_logic->GetHttpClientMgr()->Post(url, heads, content, rsp_cb, err_cb);
+	}
+	return ret;
+}
+
+uint64_t http_put(const std::string & url, const std::unordered_map<std::string, std::string>* heads, const std::string * content, HttpReqCnn::FnProcessRsp rsp_cb, HttpReqCnn::FnProcessEvent err_cb)
+{
+	uint64_t ret = 0;
+	if (nullptr != g_server_logic)
+	{
+		ret = g_server_logic->GetHttpClientMgr()->Put(url, heads, content, rsp_cb, err_cb);
+	}
+	return ret;
+}
+
+void http_cancel(int64_t async_id)
+{
+	if (nullptr != g_server_logic)
+	{
+		g_server_logic->GetHttpClientMgr()->Cancel(async_id);
+	}
+}
+
+void add_async_task(TaskBase * task)
+{
+	if (nullptr != g_server_logic)
+	{
+		g_server_logic->GetAsyncTaskMgr()->AddTask(task);
+	}
+}
+
+int dns_query(std::string host, std::vector<std::string>* out_ips)
+{
+	int ret = -1;
+	if (nullptr != g_server_logic)
+	{
+		ret = g_server_logic->GetDnsService()->QueryIp(host, out_ips);
+	}
+	return ret;
+}
+
+void dns_query_async(std::string host, DnsQueryIpCallback cb)
+{
+	if (nullptr != g_server_logic)
+	{
+		g_server_logic->GetDnsService()->QueryIpAsync(host, cb);
+	}
 }
 
 void engine_init()
@@ -115,12 +159,37 @@ EServerLogicState engine_state()
 	return ret;
 }
 
-void * mempool_malloc(uint32_t malloc_size)
+IService * engine_service()
+{
+	IService *service = nullptr;
+	if (nullptr != g_server_logic)
+	{
+		service = g_server_logic->GetService();
+
+	}
+	return service;
+}
+
+double logic_sec()
+{
+	return g_server_logic->LogicSec();
+}
+
+int64_t logic_ms()
+{
+	return g_server_logic->LogicMs();
+}
+
+int64_t delta_ms()
+{
+	return g_server_logic->DeltaMs();
+}
+void * mempool_malloc(size_t malloc_size)
 {
 	return g_server_logic->GetMemPool()->Malloc(malloc_size);
 }
 
-void * mempool_realloc(void *ptr, uint32_t new_malloc_size)
+void * mempool_realloc(void *ptr, size_t new_malloc_size)
 {
 	return g_server_logic->GetMemPool()->Realloc(ptr, new_malloc_size);
 }
@@ -177,7 +246,7 @@ void timer_remove(TimerID timer_id)
 	}
 }
 
-NetId net_listen(std::string ip, uint16_t port, std::weak_ptr<INetListenHander> handler)
+NetId net_listen(std::string ip, uint16_t port, std::weak_ptr<INetListenHandler> handler)
 {
 	NetId ret = INVALID_NET_ID;
 	if (nullptr != g_server_logic)
@@ -187,7 +256,7 @@ NetId net_listen(std::string ip, uint16_t port, std::weak_ptr<INetListenHander> 
 	return ret;
 }
 
-NetId net_connect(std::string ip, uint16_t port, std::weak_ptr<INetConnectHander> handler)
+NetId net_connect(std::string ip, uint16_t port, std::weak_ptr<INetConnectHandler> handler)
 {
 	NetId ret = INVALID_NET_ID;
 	if (nullptr != g_server_logic)
@@ -205,7 +274,7 @@ void net_close(NetId netid)
 	}
 }
 
-int64_t net_listen_async(std::string ip, uint16_t port, std::weak_ptr<INetListenHander> handler)
+int64_t net_listen_async(std::string ip, uint16_t port, std::weak_ptr<INetListenHandler> handler)
 {
 	int64_t ret = 0;
 	if (nullptr != g_server_logic)
@@ -215,7 +284,7 @@ int64_t net_listen_async(std::string ip, uint16_t port, std::weak_ptr<INetListen
 	return ret;
 }
 
-int64_t net_connect_async(std::string ip, uint16_t port, std::weak_ptr<INetConnectHander> handler)
+int64_t net_connect_async(std::string ip, uint16_t port, std::weak_ptr<INetConnectHandler> handler)
 {
 	int64_t ret = 0;
 	if (nullptr != g_server_logic)

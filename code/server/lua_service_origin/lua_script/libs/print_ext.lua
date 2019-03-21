@@ -8,8 +8,10 @@ function print(...)
             table.insert(str_list, tostring(arg))
 
         else
-            table.insert(str_list, serpent.block(arg))
+            table.insert(str_list, string.toprint(arg))
         end
     end
-    old_print(table.concat(str_list, ' '))
+    local ret = table.concat(str_list, ' ')
+    -- old_print(ret)
+    log_debug(ret)
 end
